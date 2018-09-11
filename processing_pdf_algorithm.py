@@ -30,39 +30,31 @@ __copyright__ = '(C) 2018 by Olivier Dalang / SPC'
 
 __revision__ = '$Format:%H$'
 
-from PyQt5.QtCore import QCoreApplication, QFile
+from PyQt5.QtCore import QCoreApplication, QFile, QTemporaryDir
 from PyQt5.QtXml import QDomDocument
 from qgis.core import (QgsProcessing,
                        QgsFeatureSink,
                        QgsProcessingAlgorithm,
-                       QgsProcessingParameterFile ,
+                       QgsProcessingParameterFile,
                        QgsProcessingParameterFolderDestination,
-                       QgsReadWriteContext)
+                       QgsProcessingParameterMultipleLayers,
+                       QgsReadWriteContext )
 from qgis.core import *
 
 import os.path
+import tempfile
+import shutil
+
+from .processing_pdf_algorithm_dialog import PdfAlgorithmDialog
 
 
 class ProcessingPDFAlgorithm(QgsProcessingAlgorithm):
-    """
-    This is an example algorithm that takes a vector layer and
-    creates a new identical one.
 
-    It is meant to be used as an example of how to create your own
-    algorithms and explain methods and variables used to do it. An
-    algorithm like this will be available in all elements, and there
-    is not need for additional work.
-
-    All Processing algorithms should extend the QgsProcessingAlgorithm
-    class.
-    """
-
-    # Constants used to refer to parameters and outputs. They will be
-    # used when calling the algorithm from another algorithm, or when
-    # calling from the QGIS console.
-
-    OUTPUT_FOLDER = 'OUTPUT_FOLDER'
-    LAYOUT_FILE = 'LAYOUT_FILE'
+    BASE_PROJECT = 'BASE_PROJECT'
+    LAYOUT_NAME = 'LAYOUT_NAME'
+    LAYERS_TEMPLATES = 'LAYERS_TEMPLATES'
+    LAYERS_OVERRIDES = 'LAYERS_OVERRIDES'
+    OUTPUT_FILE = 'OUTPUT_FILE'
 
     def initAlgorithm(self, config):
         """
@@ -72,45 +64,88 @@ class ProcessingPDFAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterFile (
-                self.LAYOUT_FILE,
-                self.tr('Input layout'),
+                self.BASE_PROJECT,
+                self.tr('Base project (leave empty for current project)'),
                 behavior=QgsProcessingParameterFile.File,
-                extension='qpt',
+                extension='qgs',
+                optional=True,
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterString (
+                self.LAYOUT_NAME,
+                self.tr('Layout name'),
+                optional=True,
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterString (
+                self.LAYERS_TEMPLATES,
+                self.tr('Template layers (layers to be replaced - order is important)'),
+                optional=True,
+            )
+        )
+
+        self.addParameter(
+            QgsProcessingParameterMultipleLayers (
+                self.LAYERS_OVERRIDES,
+                self.tr('Override layers (layers that will replace templates - order is important)'),
+                layerType=QgsProcessing.TypeMapLayer,
+                optional=True,
             )
         )
 
         self.addParameter(
             QgsProcessingParameterFile(
-                self.OUTPUT_FOLDER,
-                self.tr('Output folder'),
-                behavior=QgsProcessingParameterFile.Folder,
+                self.OUTPUT_FILE,
+                self.tr('Output file'),
+                behavior=QgsProcessingParameterFile.File,
+                extension='pdf',
+                optional=False,
             )
         )
+
+    def createCustomParametersWidget(self, parent):
+        return PdfAlgorithmDialog(self)
 
     def processAlgorithm(self, parameters, context, feedback):
         """
         Here is where the processing itself takes place.
         """
 
-        input_layout = self.parameterAsFile(parameters, self.LAYOUT_FILE, context)
-        output_folder = self.parameterAsFile(parameters, self.OUTPUT_FOLDER, context)
+        # get the parameter values
+        base_project = self.parameterAsFile(parameters, self.BASE_PROJECT, context)
+        layout_name = self.parameterAsString(parameters, self.LAYOUT_NAME, context)
+        layers_templates = self.parameterAsString(parameters, self.LAYERS_TEMPLATES, context)
+        layers_overrides = self.parameterAsLayerList(parameters, self.LAYERS_OVERRIDES, context)
+        output_file = self.parameterAsFile(parameters, self.OUTPUT_FILE, context)
 
-        output_file = os.path.join(output_folder, 'test.pdf')
+        # if no project file is specified, we create a temp file from the current project
+        if not base_project:
+            temp_dir = QTemporaryDir()
+            temp_dir.setAutoRemove(False)
+            base_project = os.path.join(temp_dir.path(),'temp_qgis_project')
+            QgsProject.instance().write(base_project)
 
-        dom_document = QDomDocument()
-        dom_document.setContent( QFile(input_layout) )
+        # instantiation of the project
+        project_instance = QgsProject()
+        project_instance.read(base_project)
+        
+        # replace template layers datasources by override layers datasources
+        for i,template_layer_id in enumerate(layers_templates.split(',')):
+            template_layer = project_instance.mapLayer(template_layer_id)
+            override_layer = layers_overrides[i]
+            override_uri = override_layer.dataProvider().dataSourceUri()
+            template_layer.dataProvider().setDataSourceUri(override_uri)
 
-        project_instance = QgsProject.instance()
-
-        layout = QgsLayout(project_instance)
-        layout.loadFromTemplate(dom_document, context=QgsReadWriteContext())
-
-        # layout_manager = project_instance.layoutManager()
-        # layout_item = layout_manager.layoutByName("test")  # test is the layout name
-
+        # actual export of the PDF
+        layout = project_instance.layoutManager().layoutByName(layout_name) # TODO : pick first layout if empty
         export = QgsLayoutExporter(layout)
         export.exportToPdf(output_file, QgsLayoutExporter.PdfExportSettings())
 
+        # done !!
         return {}
 
     def name(self):
