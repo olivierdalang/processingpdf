@@ -169,7 +169,7 @@ class ProcessingPDFAlgorithm(QgsProcessingAlgorithm):
         lowercase alphanumeric characters only and no spaces or other
         formatting characters.
         """
-        return 'Export template to PDF'
+        return 'Export to PDF'
 
     def displayName(self):
         """
