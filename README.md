@@ -27,7 +27,7 @@ To use, open the project in QGIS 3.3, and run the `RiskTools/Flood on buildings`
 
 ## Known issues
 
-- The override layers must be files, meaning that for this to work in a processing models, the override layers must be named (so it's saved somewhere instead of just being a memory layer)
+- ...
 
 ## Roadmap
 

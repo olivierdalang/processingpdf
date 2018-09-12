@@ -38,7 +38,8 @@ from qgis.core import (QgsProcessing,
                        QgsProcessingParameterFile,
                        QgsProcessingParameterFolderDestination,
                        QgsProcessingParameterMultipleLayers,
-                       QgsReadWriteContext )
+                       QgsReadWriteContext,
+                       QgsVectorFileWriter)
 from qgis.core import *
 
 import os.path
@@ -138,7 +139,17 @@ class ProcessingPDFAlgorithm(QgsProcessingAlgorithm):
             template_layer = project_instance.mapLayer(template_layer_id)
             template_uri = template_layer.dataProvider().dataSourceUri()
             override_layer = layers_overrides[i]
-            override_uri = override_layer.dataProvider().dataSourceUri()
+            # if the override layer is in memory, we need to write it to disk,
+            # as we can't transfer memory layers from one project to another
+            if override_layer.dataProvider().name() == 'memory':
+                temp_dir = QTemporaryDir()
+                temp_dir.setAutoRemove(False)
+                temp_path = os.path.join(temp_dir.path(),'temp.geojson')
+                QgsVectorFileWriter.writeAsVectorFormat(override_layer,temp_path,"utf-8",override_layer.crs(),"GeoJSON")
+                override_uri = temp_path
+            else:
+                override_uri = override_layer.dataProvider().dataSourceUri()
+
             template_layer.dataProvider().setDataSourceUri(override_uri)
             #debug
             QgsMessageLog.logMessage('replacing {} by {}'.format(template_uri,override_uri),'PDF alg')
