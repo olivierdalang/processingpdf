@@ -25,7 +25,7 @@ __copyright__ = '(C) 2015, Victor Olaya'
 
 __revision__ = '$Format:%H$'
 
-from qgis.PyQt.QtCore import QCoreApplication
+from qgis.PyQt.QtCore import Qt, QCoreApplication
 from qgis.PyQt.QtWidgets import (QWidget,
                                  QVBoxLayout,
                                  QHBoxLayout,
@@ -37,7 +37,8 @@ from qgis.PyQt.QtWidgets import (QWidget,
                                  QListWidget,
                                  QCheckBox,
                                  QSizePolicy,
-                                 QDialogButtonBox)
+                                 QDialogButtonBox,
+                                 QListWidgetItem)
 
 from qgis.core import (Qgis,
                        QgsProcessingFeedback,
@@ -82,22 +83,21 @@ class PdfParametersPanel(ParametersPanel):
         self.template_layers_widget = self.layoutMain.itemAt(5).widget()
         self.override_layers_widget = self.layoutMain.itemAt(7).widget()
 
-        # feedback widget
-        self.feedback_label = QLabel("...")
-        self.layoutMain.addWidget(self.feedback_label)
-
         # inject helpers widgets
         self.layouts_combobox = QComboBox()
         self.inject_helper_widget(self.layout_name_widget, self.layouts_combobox)
 
         self.template_list = QListWidget()
         self.template_list.setSelectionMode(QListWidget.MultiSelection)
-        self.inject_helper_widget(self.template_layers_widget, self.template_list, hide=True)
+        self.template_list_toggle = QPushButton("Pick")
+        self.inject_helper_widget(self.template_layers_widget, self.template_list_toggle)
 
         # initialize
         self.project_path_changed()
 
         # connect signals
+        self.template_list_toggle.pressed.connect(self.toggle_template_list_widget)
+
         self.project_path_widget.leText.textChanged.connect(self.project_path_changed)
         self.layouts_combobox.activated[str].connect(self.layouts_combobox_activated)
         self.template_list.itemSelectionChanged.connect(self.template_list_selection_changed)
@@ -107,7 +107,7 @@ class PdfParametersPanel(ParametersPanel):
         self.template_layers_widget.textChanged.connect(self.validate)
         self.override_layers_widget.selectionChanged.connect(self.validate)
 
-    def inject_helper_widget(self, widget, helper_widget, hide=False):
+    def inject_helper_widget(self, widget, helper_widget):
         """
         Helper to add a widget to the right of an existing widget (e.g. to add a button)
         """
@@ -117,8 +117,9 @@ class PdfParametersPanel(ParametersPanel):
         self.layoutMain.replaceWidget(widget, hboxwidget)
         hboxwidget.layout().addWidget(widget)
         hboxwidget.layout().addWidget(helper_widget)
-        if hide:
-            widget.hide()
+
+    def toggle_template_list_widget(self):
+        self.template_list.show()
 
     def project_path_changed(self):
         project_path = self.project_path_widget.getValue()
@@ -135,16 +136,18 @@ class PdfParametersPanel(ParametersPanel):
             self.layouts_combobox.addItem(layout.name())
 
         # repopulate the template layers
-        layer_ids = self.project_instance.mapLayers()
+        layers = [self.project_instance.mapLayer(l_id) for l_id in self.project_instance.mapLayers()]
         self.template_list.clear()
-        for layer_id in layer_ids:
-            self.template_list.addItem(layer_id)
+        for layer in reversed(layers):
+            item = QListWidgetItem(layer.name())
+            item.setData(Qt.UserRole, layer.id())
+            self.template_list.addItem(item)
 
     def layouts_combobox_activated(self, text):
         self.layout_name_widget.setText(text)
 
     def template_list_selection_changed(self):
-        layers_ids = [item.text() for item in self.template_list.selectedItems()]
+        layers_ids = [item.data(Qt.UserRole) for item in self.template_list.selectedItems()]
         self.template_layers_widget.setText(','.join(layers_ids))
 
     def validate(self):

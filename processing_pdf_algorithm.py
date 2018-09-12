@@ -54,7 +54,7 @@ class ProcessingPDFAlgorithm(QgsProcessingAlgorithm):
     LAYOUT_NAME = 'LAYOUT_NAME'
     LAYERS_TEMPLATES = 'LAYERS_TEMPLATES'
     LAYERS_OVERRIDES = 'LAYERS_OVERRIDES'
-    OUTPUT_FILE = 'OUTPUT_FILE'
+    OUTPUT_FOLDER = 'OUTPUT_FOLDER'
 
     def initAlgorithm(self, config):
         """
@@ -83,7 +83,7 @@ class ProcessingPDFAlgorithm(QgsProcessingAlgorithm):
         self.addParameter(
             QgsProcessingParameterString (
                 self.LAYERS_TEMPLATES,
-                self.tr('Template layers (layers to be replaced - order is important)'),
+                self.tr('Template layers (layers to be replaced - comma separated layer ids - order is important)'),
                 optional=True,
             )
         )
@@ -99,9 +99,9 @@ class ProcessingPDFAlgorithm(QgsProcessingAlgorithm):
 
         self.addParameter(
             QgsProcessingParameterFile(
-                self.OUTPUT_FILE,
-                self.tr('Output file'),
-                behavior=QgsProcessingParameterFile.File,
+                self.OUTPUT_FOLDER,
+                self.tr('Output folder'),
+                behavior=QgsProcessingParameterFile.Folder,
                 extension='pdf',
                 optional=False,
             )
@@ -120,7 +120,7 @@ class ProcessingPDFAlgorithm(QgsProcessingAlgorithm):
         layout_name = self.parameterAsString(parameters, self.LAYOUT_NAME, context)
         layers_templates = self.parameterAsString(parameters, self.LAYERS_TEMPLATES, context)
         layers_overrides = self.parameterAsLayerList(parameters, self.LAYERS_OVERRIDES, context)
-        output_file = self.parameterAsFile(parameters, self.OUTPUT_FILE, context)
+        output_folder = self.parameterAsFile(parameters, self.OUTPUT_FOLDER, context)
 
         # if no project file is specified, we create a temp file from the current project
         if not base_project:
@@ -136,14 +136,27 @@ class ProcessingPDFAlgorithm(QgsProcessingAlgorithm):
         # replace template layers datasources by override layers datasources
         for i,template_layer_id in enumerate(layers_templates.split(',')):
             template_layer = project_instance.mapLayer(template_layer_id)
+            template_uri = template_layer.dataProvider().dataSourceUri()
             override_layer = layers_overrides[i]
             override_uri = override_layer.dataProvider().dataSourceUri()
             template_layer.dataProvider().setDataSourceUri(override_uri)
+            #debug
+            QgsMessageLog.logMessage('replacing {} by {}'.format(template_uri,override_uri),'PDF alg')
 
         # actual export of the PDF
         layout = project_instance.layoutManager().layoutByName(layout_name) # TODO : pick first layout if empty
         export = QgsLayoutExporter(layout)
+
+        i=0
+        output_file = None
+        while not output_file or os.path.exists(output_file):
+            i+=1
+            output_file = os.path.join(output_folder, str(i).zfill(3)+'.pdf')
+
         export.exportToPdf(output_file, QgsLayoutExporter.PdfExportSettings())
+
+        # debug
+        project_instance.write(output_file+"debug.qgs")
 
         # done !!
         return {}
