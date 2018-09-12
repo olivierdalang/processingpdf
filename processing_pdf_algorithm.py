@@ -123,6 +123,9 @@ class ProcessingPDFAlgorithm(QgsProcessingAlgorithm):
         layers_overrides = self.parameterAsLayerList(parameters, self.LAYERS_OVERRIDES, context)
         output_folder = self.parameterAsFile(parameters, self.OUTPUT_FOLDER, context)
 
+        QgsMessageLog.logMessage("-- ORDER TEST -- See https://issues.qgis.org/issues/19836 --",'PDF alg')
+        QgsMessageLog.logMessage(str([l.name() for l in layers_overrides]),'PDF alg')
+
         # if no project file is specified, we create a temp file from the current project
         if not base_project:
             temp_dir = QTemporaryDir()
@@ -135,7 +138,8 @@ class ProcessingPDFAlgorithm(QgsProcessingAlgorithm):
         project_instance.read(base_project)
         
         # replace template layers datasources by override layers datasources
-        for i,template_layer_id in enumerate(layers_templates.split(',')):
+        template_layer_ids = reversed(layers_templates.split(','))
+        for i,template_layer_id in enumerate(template_layer_ids):
             template_layer = project_instance.mapLayer(template_layer_id)
             template_uri = template_layer.dataProvider().dataSourceUri()
             override_layer = layers_overrides[i]

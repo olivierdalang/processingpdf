@@ -27,7 +27,7 @@ To use, open the project in QGIS 3.3, and run the `RiskTools/Flood on buildings`
 
 ## Known issues
 
-- ...
+- Issue when running the sample in batch mode because of https://issues.qgis.org/issues/19836
 
 ## Roadmap
 
