@@ -42,6 +42,7 @@ Prototype :
 
 Long term:
 
+- see if the concept can be enlarged so that `Export as PDF` becomes just be one of several other helper algorithms (such as append/prepend/override layer, add layouts, export PDF, etc.), which probably would require having a new QGIS project parameter type in processing
 - bring this in QGIS core (as python)
 - once stabilized, eventually port to C++
 - ...
